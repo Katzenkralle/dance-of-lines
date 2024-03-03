@@ -1,27 +1,64 @@
-use termion::{screen, color, terminal_size};
+#[doc(inline)]
+pub use std; // for documentation purposes
+use std::io::{self, Write};
+use crossterm::{cursor::MoveTo, queue, QueueableCommand, style::{PrintStyledContent, Stylize, Color}, terminal::enable_raw_mode};
+use lazy_static::lazy_static; 
+//lazy_static is ok, mutability not needed
+use rand::{thread_rng, Rng};
+use std::time::Duration;
+use std::thread::sleep;
 
+mod part_handler;
+mod components;
+
+lazy_static! {
+    static ref TERM_SIZE: (u16, u16) = crossterm::terminal::size().unwrap_or_else(|_| panic!("Cannot get terminal size"));
+}
+
+
+fn create_canvas() -> Vec<components::Part>{
+    let mut rng = thread_rng();
+    let mut canvas: Vec<components::Part> = Vec::new(); // Create an empty vector to store the parts
+    let wall_color = Color::Rgb { r: 255, g: 60, b: 70 }; // Create a new color for the walls    
+
+    for y in 0..TERM_SIZE.1 {
+        if y == 0 || y == TERM_SIZE.1 - 1 {
+            for x in 0..TERM_SIZE.0 {
+                let part = components::Part::new("wall", (x, y), wall_color).unwrap(); // Use array indexing instead of tuple indexing
+                canvas.push(part);
+            
+            }
+        } else {
+            canvas.push(components::Part::new("wall", (0, y), wall_color).unwrap()); // Use array indexing instead of tuple indexing
+            canvas.push(components::Part::new("wall", (TERM_SIZE.0 - 1, y), wall_color).unwrap()); // Use array indexing instead of tuple indexing
+        }
+    }
+    canvas.push(components::Part::new("spawn", (rng.gen_range(1..TERM_SIZE.0-1), rng.gen_range(1..TERM_SIZE.1-1)), Color::Rgb { r: 10, g: 255, b: 10 }).unwrap()); // Use array indexing instead of tuple indexing
+    canvas // Return the canvas vector
+}
+
+fn draw_canvas(canvas: &Vec<components::Part>) {
+    let mut stdout = io::stdout();
+    stdout.queue(crossterm::terminal::Clear(crossterm::terminal::ClearType::All)).unwrap();
+    for part in canvas {
+        queue!(stdout, MoveTo(part.position.0, part.position.1),
+         PrintStyledContent(part.element.visual.to_string().with(part.color))).unwrap();
+    }
+    stdout.flush().unwrap();
+}
 
 fn main() {
-    let terminal_size = terminal_size().expect("Cannot get terminal size");
+    let _ = enable_raw_mode();
+    let mut state: components::CanvasState = components::CanvasState::new(create_canvas());
+    draw_canvas(&state.canvas);
+    loop {
+
+        part_handler::head_handle(&mut state.canvas);
+        part_handler::spawner_handle(&mut state.canvas);
+        state.canvas.sort_by_key(|part| (part.position.1, part.position.0));
+        draw_canvas(&state.canvas);
+        state.iterations += 1;
+        sleep(Duration::from_millis(17));
+    }
     
-    /*
-    Equivalent to:
-    let terminal_size: (u16, u16) = terminal_size().unwrap_or_else(|_| panic!("Cannot get terminal size");
-
-    (unwrap would just panic if the result is Err, and expect would panic with the message provided.)
-
-    Equivalent to:
-    let terminal_size: (u16, u16) = match terminal_size() {
-        Ok(size) => size,
-        Err(_) => panic!("Cannot get erminal Size")
-    };
-     */
-    println!("Terminal Size: {} by {} px", terminal_size.0, terminal_size.1);
 }
-/*
-Struckt: eigenes Datentypen
-enum: Aufzählungstypen, können je nach Standartwert unterschiedliche Werte annehmen
-impl: Implementierung von Methoden für Struckts
-trait: Schnittstelle, die von Struckts implementiert werden kann, impl für mehrere Struckts
-
-*/
