@@ -8,15 +8,15 @@ use crate::components::{self, Part};
 const SIGHT_RADIUS: u16 = 3;
 
 lazy_static! {
-    static ref CHECK_DIRECTIONS: HashMap<&'static str, [&'static str; 2]> = HashMap::from([
-        ("t _", ["t r", "t l"]),
-        ("t r", ["t _", "_ r"]),
-        ("t l", ["t _", "_ l"]),
-        ("b _", ["b r", "b l"]),
-        ("b r", ["b _", "_ r"]),
-        ("b l", ["b _", "_ l"]),
-        ("_ r", ["t r", "b r"]),
-        ("_ l", ["t r", "t l"]),
+    static ref CHECK_DIRECTIONS: HashMap<&'static str, ([&'static str; 3], &'static str ), > = HashMap::from([
+        ("t _", (["t _", "t r", "t l"], "body_part_h")),
+        ("t r", (["t r", "t _", "_ r"], "body_part_l")),
+        ("t l", (["t l", "t _", "_ l"], "body_part_r")),
+        ("b _", (["b _", "b r", "b l"], "body_part_h")),
+        ("b r", (["b r", "b _", "_ r"], "body_part_r")),
+        ("b l", (["b l", "b _", "_ l"], "body_part_l")),
+        ("_ r", (["_ r", "t r", "b r"], "body_part_v")),
+        ("_ l", (["_ l", "t l", "b l"], "body_part_v")),
     ]);
 }
 
@@ -27,6 +27,16 @@ lazy_static!{
         ("r",  1),
         ("l", -1),
         ("_",  0)
+    ]);
+}
+
+lazy_static!{
+    static ref Direction_Part: HashMap<&'static str, &'static str> = HashMap::from([
+        ("t", "body_part_v"),
+        ("b", "body_part_v"),
+        ("r", "body_part_h"),
+        ("l", "body_part_h"),
+        ("_", "body_part_head")
     ]);
 }
 
@@ -76,28 +86,40 @@ pub fn spawner_handle(canvas: &mut Vec<components::Part>) {
     }
 }
 
-fn recursive_colision_check(parts_in_sight: &Vec<Part>, position: &(u16, u16), direction: &str, iterations_left: u8) -> u32{
-    let x = direction.split_whitespace().take(2).collect::<Vec<&str>>();
-    let dir_x:&str = x[0];
-    let dir_y:&str = x[1];
-    let mut dyn_pos_res: Vec<(i32, i32, u32)> = Vec::new();
-    dyn_pos_res.push((i32::from(position.0) + DIRECTIONS[dir_x], i32::from(position.1) + DIRECTIONS[dir_y], 1));
-    for dynamic_pos in CHECK_DIRECTIONS[direction].into_iter() {
-        let x = dynamic_pos.split_whitespace().take(2).collect::<Vec<&str>>();
-        dyn_pos_res.push((i32::from(position.0) + DIRECTIONS[x[0]], i32::from(position.1) + DIRECTIONS[x[1]], 1));
+fn recursive_colision_check(color: &Color, parts_in_sight: &Vec<Part>, position: &(u16, u16), direction: &str, iterations_left: u8) -> (i32, i32, &'static str , i64){
+    let mut dyn_pos_res: Vec<(i32, i32, &str , i64)> = Vec::new();
+
+    // Create a vector of tuples with the possible positions and their values(liklihood of beeing chosen)
+    for direction_to_check in CHECK_DIRECTIONS[direction].0.into_iter() {
+        let x = direction_to_check.split_whitespace().take(2).collect::<Vec<&str>>();
+        dyn_pos_res.push((i32::from(position.0) + DIRECTIONS[x[0]], i32::from(position.1) + DIRECTIONS[x[1]], direction_to_check , 0));
     }
     
-    for (x, y, val) in &dyn_pos_res {
+    // Iterate over the vector and check if the position is in sight, what value the sight has
+    for index in 0..dyn_pos_res.len() {
+        let (x, y, v_direction, val): &mut (i32, i32, &str, i64) = &mut dyn_pos_res[index];
         for part in parts_in_sight {
-           if part.position == (*x as u16, *y as u16) {
-               //When element in sight, part is element in sight
-
-           } 
-
-        }   
+            if part.position == (*x as u16, *y as u16) {
+                //When element in sight, part is element in sight
+                if part.element.e_type == "alive"  {//&& part.color != *color
+                    *val -= 100;
+                }
+                else if part.element.e_type == "food" {
+                    *val += 100;
+                }
+                else if part.element.e_type == "wall" {
+                    *val -= 10000;
+                }
+            } 
+        }
+        if iterations_left > 0 {
+            *val += recursive_colision_check(color, &parts_in_sight, &(*x as u16, *y as u16), &v_direction, iterations_left - 1).3;
+        }
+        //dyn_pos_res[index].3 = *val;
     }
-    dyn_pos_res.sort_by(|a, b| b.2.cmp(&a.2));
-    dyn_pos_res[0].2
+    
+    dyn_pos_res.sort_by(|a, b| b.3.cmp(&a.3));
+    dyn_pos_res[0]
     /*In this example, the sort_by method is used to sort the vector data. 
     The closure provided to sort_by compares tuples (i32, i32, u32) based on the third element (u32).
     b.2.cmp(&a.2) compares the third element of b and a (in reverse order because we want the highest element first). */
@@ -118,7 +140,11 @@ pub fn head_handle(canvas: &mut Vec<components::Part>) {
                 .map(|(_, elem)| elem.copy())
                 .collect();
 
-            let res = recursive_colision_check(&parts_in_sight, &canvas[head_index].position , &canvas[head_index].direction.to_string() , 3);
+            let res = recursive_colision_check(&canvas[head_index].color, &parts_in_sight, &canvas[head_index].position , &canvas[head_index].direction.to_string() , 3);
+            let old_pos: (u16, u16) = canvas[head_index].position;           
+            canvas[head_index].direction = res.2.to_string();
+            canvas[head_index].position = (res.0 as u16, res.1 as u16);
+            canvas.push(components::Part::new(CHECK_DIRECTIONS[res.2].1, old_pos, canvas[head_index].color).unwrap());
     }
 }
 }
