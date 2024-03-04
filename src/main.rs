@@ -33,7 +33,10 @@ fn create_canvas() -> Vec<components::Part>{
             canvas.push(components::Part::new("wall", (TERM_SIZE.0 - 1, y), wall_color).unwrap()); // Use array indexing instead of tuple indexing
         }
     }
+    for i in 0..3{
     canvas.push(components::Part::new("spawn", (rng.gen_range(1..TERM_SIZE.0-1), rng.gen_range(1..TERM_SIZE.1-1)), Color::Rgb { r: 10, g: 255, b: 10 }).unwrap()); // Use array indexing instead of tuple indexing
+    }
+    
     canvas // Return the canvas vector
 }
 
@@ -58,7 +61,7 @@ fn main() {
         part_handler::head_handle(&mut state.canvas, &mut state.colors);
         part_handler::spawner_handle(&mut state.canvas, &mut state.colors);
         part_handler::handle_killed(&mut state.canvas);
-        //part_handler::spawn_food(&mut state.canvas);
+        part_handler::spawn_food(&mut state.canvas);
         state.canvas.sort_by_key(|part| (part.position.1, part.position.0));
         draw_canvas(&state.canvas);
         state.iterations += 1;
