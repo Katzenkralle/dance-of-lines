@@ -49,16 +49,20 @@ fn draw_canvas(canvas: &Vec<components::Part>) {
 
 fn main() {
     let _ = enable_raw_mode();
+    let mut stdout = io::stdout();
+    stdout.queue(crossterm::cursor::Hide).unwrap();
+    stdout.flush().unwrap();
     let mut state: components::CanvasState = components::CanvasState::new(create_canvas());
     draw_canvas(&state.canvas);
     loop {
-
-        part_handler::head_handle(&mut state.canvas);
-        part_handler::spawner_handle(&mut state.canvas);
+        part_handler::head_handle(&mut state.canvas, &mut state.colors);
+        part_handler::spawner_handle(&mut state.canvas, &mut state.colors);
+        part_handler::handle_killed(&mut state.canvas);
+        //part_handler::spawn_food(&mut state.canvas);
         state.canvas.sort_by_key(|part| (part.position.1, part.position.0));
         draw_canvas(&state.canvas);
         state.iterations += 1;
-        sleep(Duration::from_millis(17));
+        sleep(Duration::from_millis(32));
     }
     
 }
