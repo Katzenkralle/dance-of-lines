@@ -2,7 +2,7 @@
 pub use std; // for documentation purposes
 use std::io::{self, Write};
 use components::CanvasParts;
-use crossterm::{cursor::MoveTo, queue, QueueableCommand, style::{PrintStyledContent, Stylize, Color}, terminal::enable_raw_mode};
+use crossterm::{cursor::MoveTo, execute, queue, style::{Color, PrintStyledContent, Stylize}, terminal::{enable_raw_mode, BeginSynchronizedUpdate, EnableLineWrap}, QueueableCommand};
 use lazy_static::lazy_static; 
 //lazy_static is ok, mutability not needed
 use rand::{thread_rng, Rng};
@@ -53,23 +53,40 @@ fn create_canvas() -> CanvasParts{
     
     canvas // Return the canvas vector
 }
-
 fn draw_canvas(canvas: &CanvasParts) {
     let mut stdout = io::stdout();
-    stdout.queue(crossterm::terminal::Clear(crossterm::terminal::ClearType::All)).unwrap();
+    
     let mut unified_elements = canvas.unify_elements();
     unified_elements.sort_by_key(|part| (part.position.1, part.position.0));
-
+    
+    if true { // Alternative draw method
+        execute!(stdout, MoveTo(0,0)).unwrap();
+        for y in 0..TERM_SIZE.1 {
+            for x in 0..TERM_SIZE.0 {
+                if unified_elements.iter().filter(|part| part.position == (x, y)).count() == 0 {
+                    stdout.write(b" ").unwrap();
+                } else {
+                    let part = unified_elements.iter().find(|part| part.position == (x, y)).unwrap();
+                    queue!(stdout,  PrintStyledContent(ELEMENT_VISUALS[&part.element].to_string().with(part.color))).unwrap();
+                
+                }
+            }
+        }
+    } else {
+    stdout.queue(crossterm::terminal::Clear(crossterm::terminal::ClearType::All)).unwrap();
     for part in unified_elements.iter() {
         queue!(stdout, MoveTo(part.position.0, part.position.1),
          PrintStyledContent(ELEMENT_VISUALS[&part.element].to_string().with(part.color))).unwrap();
     }
+    }
+        
     stdout.flush().unwrap();
 }
 
 fn main() {
     // Prepare the terminal
-    let _ = enable_raw_mode();
+    //let _ = enable_raw_mode();
+    execute!(io::stdout(), EnableLineWrap).unwrap();
     let mut stdout = io::stdout();
     stdout.queue(crossterm::cursor::Hide).unwrap();
     stdout.flush().unwrap();
@@ -86,7 +103,7 @@ fn main() {
 
         draw_canvas(&canvas);
         state.iterations += 1;
-        sleep(Duration::from_millis(32));
+        sleep(Duration::from_millis(16));
     }
     
 }
