@@ -93,11 +93,11 @@ fn main() {
 
     // Create the canvas
     let mut canvas: CanvasParts = create_canvas();
-    let mut state = components::CanvasState {colors: 0, iterations: 0, }; //food_rate: 0
+    let mut state = components::CanvasState {iterations: 0, }; //food_rate: 0
     draw_canvas(&canvas);
     loop {
-        part_handler::head_handle(&mut canvas, &mut state.colors);
-        part_handler::spawner_handle(&mut canvas, &mut state.colors);
+        part_handler::head_handle(&mut canvas);
+        part_handler::spawner_handle(&mut canvas);
         part_handler::handle_killed(&mut canvas.alive);
         part_handler::spawn_food(&mut canvas);  
 

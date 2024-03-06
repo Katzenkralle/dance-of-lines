@@ -100,7 +100,6 @@ impl CanvasParts{
 }
 
 pub struct CanvasState {
-    pub(crate) colors: i32,
     pub(crate) iterations: u128,
     //pub(crate) food_rate: u8,
 }

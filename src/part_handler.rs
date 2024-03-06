@@ -1,11 +1,12 @@
-
+use std::thread;
+use std::sync::mpsc;
 use crossterm::style::Color;
 use lazy_static::lazy_static;
 use rand::Rng;
 use crate::HashMap;
 
 use crate::components::{self, CanvasParts, Creature, Direction, Element, Part};
-const SIGHT_RADIUS: u16 = 5;
+const SIGHT_RADIUS: u16 = 4;
 
 lazy_static! {
     pub static ref CHECK_DIRECTIONS: HashMap<(Direction, Direction), (Vec<Vec<Direction>>, Element)> = HashMap::from([
@@ -47,14 +48,14 @@ fn get_unused_color(creatures: &Vec<Creature>) -> Color {
     color
 }
 
-pub fn spawner_handle(canvas: &mut CanvasParts, heads: &i32) {
+pub fn spawner_handle(canvas: &mut CanvasParts) {
     let inactive_spawns: Vec<usize> = canvas.interactable.iter()
     .enumerate()
     .filter(|(_, elem)| elem.element == Element::Spawn && canvas.alive.iter().filter(|creature| creature.spawner_at == elem.position).count() == 0)
     .map(|(index, _)| index)
     .collect();
 
-    if *heads < inactive_spawns.len() as i32{
+    if canvas.alive.len()< inactive_spawns.len() {
         canvas.interactable[inactive_spawns[0]].color = Color::Rgb { r: 10, g: 255, b: 10 };
     }
 
@@ -128,9 +129,8 @@ fn recursive_colision_check(color: &Color, parts_in_sight: &Vec<Part>, position:
     b.2.cmp(&a.2) compares the third element of b and a (in reverse order because we want the highest element first). */
 }
 
-pub fn head_handle(canvas: &mut CanvasParts, head_count: &mut i32) {
+pub fn head_handle(canvas: &mut CanvasParts) {
     // Find all elements that head can see
-    *head_count = canvas.alive.len() as i32;
     let unified_canvas = canvas.clone();
     for creature in canvas.alive.iter_mut() {
         let head = creature.parts.iter().filter(|elem| elem.element == Element::BodyPartHead).next();
