@@ -93,34 +93,51 @@ pub fn spawner_handle(canvas: &mut CanvasParts) {
 fn recursive_colision_check(color: &Color, parts_in_sight: &Vec<Part>, position: &(u16, u16),
                              direction: &(Direction, Direction), iterations_left: u8) -> (i32, i32, (Direction, Direction), i64){
     // Position to check x, Position to check y, Direction to walk, Vale of Direction
-    let mut dyn_pos_res: Vec<(i32, i32, (Direction, Direction) , i64)> = Vec::new();
+    let mut dyn_pos_res: Vec<(i32, i32, (Direction, Direction), i64)> = Vec::new();
+
 
     // Create a vector of tuples with the possible positions and their values(liklihood of beeing chosen)
     for direction_to_check in CHECK_DIRECTIONS[&direction].0.iter() {
         let (dir_x, dir_y): (Direction, Direction) = (direction_to_check[0], direction_to_check[1]);
         dyn_pos_res.push((i32::from(position.0) + DIRECTIONS[&dir_x], i32::from(position.1) + DIRECTIONS[&dir_y], (dir_x, dir_y), 0));
     }
-    
+
+    let (sender, receiver) = mpsc::channel();
+    let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
     // Iterate over the vector and check if the position is in sight, what value the sight has
     for index in 0..dyn_pos_res.len() {
-        let (x, y, v_direction, val): &mut (i32, i32, (Direction, Direction), i64) = &mut dyn_pos_res[index];
+        let (x, y, v_direction, mut val): (i32, i32, (Direction, Direction), i64) = dyn_pos_res[index].clone();
         for part in parts_in_sight {
-            if part.position == (*x as u16, *y as u16) {
+            if part.position == (x as u16, y as u16) {
                 //When element in sight, part is element in sight
-                *val = match part.element {
-                        Element::Wall => -1000,
+                val = match part.element {
+                        Element::Wall | Element::Spawn => -100,
                         Element::BodyPartHori | Element::BodyPartVert |
-                        Element::BodyPartLeftLean | Element::BodyPartRightLean | Element::BodyPartHead => *val -1000,
-                        Element::Food => 100,
+                        Element::BodyPartLeftLean | Element::BodyPartRightLean | Element::BodyPartHead => val -100,
+                        Element::Food => 10,
                         _ => 0,
                     }
             } 
         }
+        dyn_pos_res[index].3 = val;
+
         if iterations_left > 0 {
-            *val += recursive_colision_check(color, &parts_in_sight, &(*x as u16, *y as u16), &v_direction, iterations_left - 1).3;
+            let sender = sender.clone();
+            let color = color.clone();
+            let parts_in_sight = parts_in_sight.clone();
+            threads.push(thread::spawn(move || {
+                let t_val = recursive_colision_check(&color, &parts_in_sight, &(x as u16, y as u16), &v_direction, iterations_left - 1).3;
+                sender.send((t_val, index)).unwrap();
+            }));
         }
-        //dyn_pos_res[index].3 = *val;
     }
+
+   
+    for _ in 0..(threads.len()) {
+        let thread_res = receiver.recv().unwrap();
+        dyn_pos_res[thread_res.1].3 += thread_res.0;
+    }
+
     
     dyn_pos_res.sort_by(|a, b| b.3.cmp(&a.3));
     dyn_pos_res[0]
@@ -130,6 +147,7 @@ fn recursive_colision_check(color: &Color, parts_in_sight: &Vec<Part>, position:
 }
 
 pub fn head_handle(canvas: &mut CanvasParts) {
+    //Todo: Reomve or improve threading in this function!!
     // Find all elements that head can see
     let (sender, receiver) = mpsc::channel();
 
@@ -156,7 +174,7 @@ pub fn head_handle(canvas: &mut CanvasParts) {
 
         let thread = thread::spawn(move || {
                 let result: (i32, i32, (Direction, Direction), i64) = recursive_colision_check(&head.color, &parts_in_sight_thread,
-                                   &head.position, &dir_thread , 3);   
+                                   &head.position, &dir_thread , SIGHT_RADIUS as u8);   
                 sender.send(result).unwrap();
         });
 

@@ -103,7 +103,7 @@ fn main() {
 
         draw_canvas(&canvas);
         state.iterations += 1;
-        sleep(Duration::from_millis(16));
+        sleep(Duration::from_millis(32));
     }
     
 }
