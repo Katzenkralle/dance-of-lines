@@ -91,7 +91,7 @@ pub fn spawner_handle(canvas: &mut CanvasParts) {
 }
 
 fn recursive_colision_check(color: &Color, parts_in_sight: &Vec<Part>, position: &(u16, u16),
-                             direction: &(Direction, Direction), iterations_left: u8) -> (i32, i32, (Direction, Direction), i64) {
+                             direction: &(Direction, Direction), iterations_left: u8) -> (i32, i32, (Direction, Direction), i64){
     // Position to check x, Position to check y, Direction to walk, Vale of Direction
     let mut dyn_pos_res: Vec<(i32, i32, (Direction, Direction) , i64)> = Vec::new();
 
@@ -131,13 +131,15 @@ fn recursive_colision_check(color: &Color, parts_in_sight: &Vec<Part>, position:
 
 pub fn head_handle(canvas: &mut CanvasParts) {
     // Find all elements that head can see
+    let (sender, receiver) = mpsc::channel();
+
     let unified_canvas = canvas.clone();
     for creature in canvas.alive.iter_mut() {
         let head = creature.parts.iter().filter(|elem| elem.element == Element::BodyPartHead).next();
         if head.is_none() {
             continue;
         }
-        let head = head.unwrap();
+        let head = head.unwrap().clone(); // Clone the head to avoid borrowing issues
             
 
         // Concartination of all parts in sight
@@ -147,9 +149,19 @@ pub fn head_handle(canvas: &mut CanvasParts) {
                 (elem.position.1 as i64 - head.position.1 as i64).pow(2) <= SIGHT_RADIUS.pow(2) as i64)
                 .map(|elem| **elem)
                 .collect::<Vec<_>>();    
-        let res: (i32, i32, (Direction, Direction), i64) = recursive_colision_check(&head.color, &parts_in_sight,
-                                   &head.position, &creature.curent_direction , 3);    
-        
+
+        let parts_in_sight_thread = parts_in_sight.clone();
+        let dir_thread = creature.curent_direction.clone();
+        let sender = sender.clone();
+
+        let thread = thread::spawn(move || {
+                let result: (i32, i32, (Direction, Direction), i64) = recursive_colision_check(&head.color, &parts_in_sight_thread,
+                                   &head.position, &dir_thread , 3);   
+                sender.send(result).unwrap();
+        });
+
+        let res: (i32, i32, (Direction, Direction), i64) = receiver.recv().unwrap();
+        thread.join().unwrap();
         // Check colisions of new position
         let colision = parts_in_sight.iter().filter(|elem| elem.position == (res.0 as u16, res.1 as u16))
                         .filter(|elem| elem.element != Element::Food).count() > 0;
