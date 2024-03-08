@@ -6,6 +6,13 @@ use crossterm::style::Color;
 use crate::TERM_SIZE;
 use crate::part_handler;
 
+#[derive(PartialEq, Clone)]
+pub enum Species {
+    NormalSnake,
+    DetachedSnake,
+    Wesp
+}
+
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 pub enum Direction {
     Up,
@@ -41,6 +48,7 @@ pub struct Part {
 pub(crate) struct Creature {
     pub(crate) parts: Vec<Part>,
     pub(crate) color: Color,
+    pub(crate) species: Species,
     pub(crate) curent_direction: (Direction, Direction),
     pub(crate) spawner_at: (u16, u16),
     pub(crate) killed: bool,
@@ -63,7 +71,7 @@ impl Creature {
 pub(crate) struct CanvasParts {
     pub(crate) alive: Vec<Creature>,
     pub(crate) environment: Vec<Part>,
-    pub(crate) interactable: Vec<Part>,   
+    pub(crate) interactable: Vec<Part>, 
 }
 
 impl CanvasParts{
@@ -86,9 +94,10 @@ impl CanvasParts{
         }
     }
 }
-    pub(crate) fn add_creature(&mut self, position: (u16, u16), color: Color, curent_direction: (Direction, Direction), spawner_at: (u16, u16)) {
+    pub(crate) fn add_creature(&mut self, position: (u16, u16), color: Color, curent_direction: (Direction, Direction), species: Species, spawner_at: (u16, u16)) {
         self.alive.push(Creature {parts: vec![Part { element: Element::BodyPartHead, position: position, color: color }],
-                                 color: color, curent_direction: curent_direction, killed: false, spawner_at: spawner_at});
+                                 color: color, curent_direction: curent_direction, killed: false,
+                                 species: species, spawner_at: spawner_at});
     }
 
     pub(crate) fn unify_elements(&self) -> Vec<&Part> {
@@ -101,5 +110,6 @@ impl CanvasParts{
 
 pub struct CanvasState {
     pub(crate) iterations: u128,
+    pub(crate) cleared_coords: Vec<(u16, u16)>,
     //pub(crate) food_rate: u8,
 }

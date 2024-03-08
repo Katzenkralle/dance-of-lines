@@ -2,10 +2,11 @@ use std::thread;
 use std::sync::mpsc;
 use crossterm::style::Color;
 use lazy_static::lazy_static;
+use rand::seq::index;
 use rand::Rng;
 use crate::HashMap;
 
-use crate::components::{self, CanvasParts, Creature, Direction, Element, Part};
+use crate::components::{self, CanvasParts, Creature, Direction, Element, Part, Species};
 const SIGHT_RADIUS: u16 = 4;
 
 lazy_static! {
@@ -82,7 +83,7 @@ pub fn spawner_handle(canvas: &mut CanvasParts) {
             };
             
             if !check_collision(&canvas.environment, (pos.0, pos.1)) {
-                canvas.add_creature((pos.0, pos.1),  get_unused_color(&canvas.alive), pos.2, canvas.interactable[index].position);
+                canvas.add_creature((pos.0, pos.1), get_unused_color(&canvas.alive), pos.2, Species::NormalSnake, canvas.interactable[index].position);
                 canvas.interactable[index].color = Color::Rgb { r: 10, g: 100, b: 10 };
             }
         }
@@ -202,29 +203,34 @@ pub fn head_handle(canvas: &mut CanvasParts) {
 }
 
 
-pub fn handle_killed(creatures: &mut Vec<Creature>) {
-    let killed_creatures: Vec<usize> = creatures.iter().enumerate().filter(|(_, elem)| elem.killed).map(|(index, _)| index).collect::<Vec<_>>();
-    for index in &killed_creatures {
-        //let len_creature = creatures[index].parts.len();
-        for _ in 0..=3 {
-            if creatures[*index].parts.len() == 0 {
-                break;
+pub fn handle_killed(creatures: &mut Vec<Creature>, cleared_coords: &mut Vec<(u16, u16)>) {
+    //let killed_creatures: Vec<usize> = creatures.iter().enumerate().filter(|(_, elem)| elem.killed).map(|(index, _)| index).collect::<Vec<_>>();
+    let mut to_remove: Vec<usize> = Vec::new();
+    for (index, creature) in creatures.iter_mut().enumerate().rev() {
+        //if creature.species == Species::DetachedSnake && creature.parts.len() > 4{
+         //   creatures[index].parts.remove(1);
+        //}
+        if creature.killed {
+            for _ in 0..=3 {
+                if creature.parts.len() == 0 {
+                    to_remove.push(index);
+                    break;
+                }
+                cleared_coords.push(creature.parts[0].position);
+                creature.parts.remove(0);
             }
-            creatures[*index].parts.remove(0);
         }
     }
-    for index in killed_creatures.iter().rev() {
-        if creatures[*index].parts.len() == 0 {
-            creatures.remove(*index);
-    }
+    // It is bad to remove elements from a vector while iterating over it
+    to_remove.iter().for_each(|x| {creatures.remove(*x);});
 }
-}
+
 
 
 pub fn spawn_food(canvas: &mut CanvasParts) {
     let mut rng = rand::thread_rng();
 
-    if rng.gen_bool(0.2){
+    if rng.gen_bool(0.4){
         let mut pos: (u16, u16) = (rng.gen_range(1..crate::TERM_SIZE.0 - 1), rng.gen_range(1..crate::TERM_SIZE.1 - 1));
         while check_collision(&canvas.unify_elements().iter().map(|part| **part).collect(), pos) {
             pos = (rng.gen_range(1..crate::TERM_SIZE.0 - 1), rng.gen_range(1..crate::TERM_SIZE.1 - 1));

@@ -2,12 +2,13 @@
 pub use std; // for documentation purposes
 use std::io::{self, Write};
 use components::CanvasParts;
-use crossterm::{cursor::MoveTo, execute, queue, style::{Color, PrintStyledContent, Stylize}, terminal::{enable_raw_mode, BeginSynchronizedUpdate, EnableLineWrap}, QueueableCommand};
+use crossterm::{cursor::MoveTo, execute, queue, style::{Color, PrintStyledContent, Stylize}, terminal::{enable_raw_mode, EnableLineWrap}, QueueableCommand};
 use lazy_static::lazy_static; 
 //lazy_static is ok, mutability not needed
 use rand::{thread_rng, Rng};
 use std::time::Duration;
 use std::thread::sleep;
+use std::time::Instant;
 use std::collections::HashMap;
 
 mod part_handler;
@@ -46,40 +47,29 @@ fn create_canvas() -> CanvasParts{
             canvas.add_element(components::Element::Wall, (0, y), Some(wall_color), None); // Use array indexing instead of tuple indexing
         }
     }
-    for _ in 0..3{
+    for _ in 0..6{
     // Use array indexing instead of tuple indexing
     canvas.add_element(components::Element::Spawn, (rng.gen_range(1..TERM_SIZE.0-1), rng.gen_range(1..TERM_SIZE.1-1)), Some(Color::Rgb { r: 10, g: 255, b: 10 }), None);
     }
     
     canvas // Return the canvas vector
 }
-fn draw_canvas(canvas: &CanvasParts) {
+fn draw_canvas(canvas: &CanvasParts, cleared_coords: &mut Vec<(u16, u16)>) {
     let mut stdout = io::stdout();
     
     let mut unified_elements = canvas.unify_elements();
     unified_elements.sort_by_key(|part| (part.position.1, part.position.0));
     
-    if true { // Alternative draw method
-        execute!(stdout, MoveTo(0,0)).unwrap();
-        for y in 0..TERM_SIZE.1 {
-            for x in 0..TERM_SIZE.0 {
-                if unified_elements.iter().filter(|part| part.position == (x, y)).count() == 0 {
-                    stdout.write(b" ").unwrap();
-                } else {
-                    let part = unified_elements.iter().find(|part| part.position == (x, y)).unwrap();
-                    queue!(stdout,  PrintStyledContent(ELEMENT_VISUALS[&part.element].to_string().with(part.color))).unwrap();
-                
-                }
-            }
-        }
-    } else {
-    stdout.queue(crossterm::terminal::Clear(crossterm::terminal::ClearType::All)).unwrap();
+    for location in cleared_coords.iter() {
+        queue!(stdout, MoveTo(location.0, location.1), PrintStyledContent(" ".to_string().with(Color::Reset))).unwrap();
+    }
+
     for part in unified_elements.iter() {
         queue!(stdout, MoveTo(part.position.0, part.position.1),
-         PrintStyledContent(ELEMENT_VISUALS[&part.element].to_string().with(part.color))).unwrap();
+        PrintStyledContent(ELEMENT_VISUALS[&part.element].to_string().with(part.color))).unwrap();
+    
     }
-    }
-        
+    cleared_coords.clear();
     stdout.flush().unwrap();
 }
 
@@ -89,21 +79,25 @@ fn main() {
     execute!(io::stdout(), EnableLineWrap).unwrap();
     let mut stdout = io::stdout();
     stdout.queue(crossterm::cursor::Hide).unwrap();
+    stdout.queue(crossterm::terminal::Clear(crossterm::terminal::ClearType::All)).unwrap();
     stdout.flush().unwrap();
-
     // Create the canvas
     let mut canvas: CanvasParts = create_canvas();
-    let mut state = components::CanvasState {iterations: 0, }; //food_rate: 0
-    draw_canvas(&canvas);
+    let mut state = components::CanvasState { iterations: 0, cleared_coords: Vec::new() }; //food_rate: 0
+    draw_canvas(&canvas, &mut state.cleared_coords);
     loop {
+        //let mut now = Instant::now();
         part_handler::head_handle(&mut canvas);
         part_handler::spawner_handle(&mut canvas);
-        part_handler::handle_killed(&mut canvas.alive);
+        part_handler::handle_killed(&mut canvas.alive, &mut state.cleared_coords);
         part_handler::spawn_food(&mut canvas);  
-
-        draw_canvas(&canvas);
+        //let elapsed_calc = now.elapsed();
+        //now = Instant::now();
+        draw_canvas(&canvas, &mut state.cleared_coords);
+        //let elapsed = now.elapsed();
+        //println!("Print Elapsed: {:.2?}, Calc Elapsed: {:.2?}", elapsed, elapsed_calc);
         state.iterations += 1;
-        sleep(Duration::from_millis(32));
+        //sleep(Duration::from_millis(8));
     }
     
 }
