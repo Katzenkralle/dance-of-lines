@@ -50,44 +50,36 @@ fn get_unused_color(creatures: &Vec<Creature>) -> Color {
 }
 
 pub fn spawner_handle(canvas: &mut CanvasParts) {
-    let inactive_spawns: Vec<usize> = canvas.interactable.iter()
-    .enumerate()
-    .filter(|(_, elem)| elem.element == Element::Spawn && canvas.alive.iter().filter(|creature| creature.spawner_at == elem.position).count() == 0)
-    .map(|(index, _)| index)
-    .collect();
-
-    if canvas.alive.len()< inactive_spawns.len() {
-        canvas.interactable[inactive_spawns[0]].color = Color::Rgb { r: 10, g: 255, b: 10 };
-    }
-
-    
     // Collect the indices of active spawns
-    let active_spawn_indices: Vec<usize> = canvas.interactable.iter_mut()
+    let unused_spawns: Vec<usize> = canvas.interactable.iter_mut()
         .enumerate()
-        .filter(|(_, elem)| elem.element == Element::Spawn && canvas.alive.iter().filter(|creature| creature.spawner_at == elem.position).count() == 0)
-        .map(|(index, _)| index)
+        .filter(|(_, elem)| elem.element == Element::Spawn && 
+                canvas.alive.iter()
+                .filter(|creature| creature.spawner_at == elem.position).count() == 0)
+        .map(|(index, elem)|  {elem.color = Color::Rgb { r: 10, g: 255, b: 10 }; index})
         .collect();
 
     let mut rand_gen = rand::thread_rng();
-    //let enviorment = canvas.environment.clone();
-    for &index in &active_spawn_indices {
-        let x: u8 = rand_gen.gen_range(0..100);
-        if rand_gen.gen_range(0..100) < 10 {
-            let pos: (u16, u16, (Direction, Direction)) = match x % 4 {
-                // 0: up 1: right 2: down 3: left
-                0 => (canvas.interactable[index].position.0, canvas.interactable[index].position.1 - 1, (Direction::Up, Direction::None)),
-                1 => (canvas.interactable[index].position.0 + 1, canvas.interactable[index].position.1, (Direction::None, Direction::Right)),
-                2 => (canvas.interactable[index].position.0, canvas.interactable[index].position.1 + 1, (Direction::Down, Direction::None)),
-                3 => (canvas.interactable[index].position.0 - 1, canvas.interactable[index].position.1, (Direction::None, Direction::Left)),
-                _ => (1, 1, (Direction::Down, Direction::None)),
-            };
-            
-            if !check_collision(&canvas.environment, (pos.0, pos.1)) {
-                canvas.add_creature((pos.0, pos.1), get_unused_color(&canvas.alive), pos.2, Species::NormalSnake, canvas.interactable[index].position);
-                canvas.interactable[index].color = Color::Rgb { r: 10, g: 100, b: 10 };
-            }
+    let active_spawn_count = unused_spawns.len();
+
+    let x: u16 = rand_gen.gen_range(0..=1000);
+    if x < 10*active_spawn_count as u16 {
+        let index = unused_spawns[rand_gen.gen_range(0..active_spawn_count)];
+        let pos: (u16, u16, (Direction, Direction)) = match x % 4 {
+            // 0: up 1: right 2: down 3: left
+            0 => (canvas.interactable[index].position.0, canvas.interactable[index].position.1 - 1, (Direction::Up, Direction::None)),
+            1 => (canvas.interactable[index].position.0 + 1, canvas.interactable[index].position.1, (Direction::None, Direction::Right)),
+            2 => (canvas.interactable[index].position.0, canvas.interactable[index].position.1 + 1, (Direction::Down, Direction::None)),
+            3 => (canvas.interactable[index].position.0 - 1, canvas.interactable[index].position.1, (Direction::None, Direction::Left)),
+            _ => (1, 1, (Direction::Down, Direction::None)),
+        };
+        
+        if !check_collision(&canvas.environment, (pos.0, pos.1)) {
+            canvas.add_creature((pos.0, pos.1), get_unused_color(&canvas.alive), pos.2, Species::NormalSnake, canvas.interactable[index].position);
+            canvas.interactable[index].color = Color::Rgb { r: 10, g: 100, b: 10 };        
         }
     }
+    
 
 }
 
@@ -230,7 +222,7 @@ pub fn handle_killed(creatures: &mut Vec<Creature>, cleared_coords: &mut Vec<(u1
 pub fn spawn_food(canvas: &mut CanvasParts) {
     let mut rng = rand::thread_rng();
 
-    if rng.gen_bool(0.4){
+    if rng.gen_bool(0.35){
         let mut pos: (u16, u16) = (rng.gen_range(1..crate::TERM_SIZE.0 - 1), rng.gen_range(1..crate::TERM_SIZE.1 - 1));
         while check_collision(&canvas.unify_elements().iter().map(|part| **part).collect(), pos) {
             pos = (rng.gen_range(1..crate::TERM_SIZE.0 - 1), rng.gen_range(1..crate::TERM_SIZE.1 - 1));

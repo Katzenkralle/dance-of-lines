@@ -47,7 +47,7 @@ fn create_canvas() -> CanvasParts{
             canvas.add_element(components::Element::Wall, (0, y), Some(wall_color), None); // Use array indexing instead of tuple indexing
         }
     }
-    for _ in 0..6{
+    for _ in 0..3{
     // Use array indexing instead of tuple indexing
     canvas.add_element(components::Element::Spawn, (rng.gen_range(1..TERM_SIZE.0-1), rng.gen_range(1..TERM_SIZE.1-1)), Some(Color::Rgb { r: 10, g: 255, b: 10 }), None);
     }
@@ -97,7 +97,7 @@ fn main() {
         //let elapsed = now.elapsed();
         //println!("Print Elapsed: {:.2?}, Calc Elapsed: {:.2?}", elapsed, elapsed_calc);
         state.iterations += 1;
-        //sleep(Duration::from_millis(8));
+        sleep(Duration::from_millis(8));
     }
     
 }
