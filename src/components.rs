@@ -46,7 +46,11 @@ pub fn directions_to_check(current_dir: &(DirectionX, DirectionY), fov: isize) -
         //   index = (index +1) % array.len(); loop through the array avoiding out of bounds
         //% operator is the remainder operator, not the modulo operator
         let index_circle = (((current_index + i)%circle_len) + circle_len)%circle_len;
+        if i == 0 {
+            directions_to_check.insert(0, circle[index_circle as usize])
+        } else {
         directions_to_check.push(circle[index_circle as usize]);
+        }
     }
     directions_to_check
 }
@@ -83,6 +87,8 @@ pub enum Element {
     BodyPartRightLean,
     Food,
     BodyPartHead,
+    WespHead,
+    WespBody,
 }
 #[derive(Copy, Clone)]
 
@@ -112,16 +118,20 @@ impl Creature {
         if new_position.0 > TERM_SIZE.0 || new_position.0 <= 0 ||  new_position.1 > TERM_SIZE.1 || new_position.1 <= 0 || colision {
             self.killed = true;
         }
-        let part_to_append = match moved_in_direction {
-            (DirectionX::None, DirectionY::Up) =>  Element::BodyPartVert,
-            (DirectionX::Right,DirectionY::Up) =>  Element::BodyPartLeftLean,
-            (DirectionX::Left, DirectionY::Up) =>  Element::BodyPartRightLean,
-            (DirectionX::None, DirectionY::Down) =>Element::BodyPartVert,
-            (DirectionX::Right,DirectionY::Down) =>Element::BodyPartRightLean,
-            (DirectionX::Left, DirectionY::Down) =>Element::BodyPartLeftLean,
-            (DirectionX::Right,DirectionY::None) =>Element::BodyPartHori,
-            (DirectionX::Left, DirectionY::None) =>Element::BodyPartHori,
-            _ => Element::BodyPartHori,
+        let part_to_append = if self.species == Species::Wesp {
+            Element::WespBody
+        } else {
+            match moved_in_direction {
+                (DirectionX::None, DirectionY::Up) =>  Element::BodyPartVert,
+                (DirectionX::Right,DirectionY::Up) =>  Element::BodyPartLeftLean,
+                (DirectionX::Left, DirectionY::Up) =>  Element::BodyPartRightLean,
+                (DirectionX::None, DirectionY::Down) =>Element::BodyPartVert,
+                (DirectionX::Right,DirectionY::Down) =>Element::BodyPartRightLean,
+                (DirectionX::Left, DirectionY::Down) =>Element::BodyPartLeftLean,
+                (DirectionX::Right,DirectionY::None) =>Element::BodyPartHori,
+                (DirectionX::Left, DirectionY::None) =>Element::BodyPartHori,
+                _ => Element::BodyPartHori,
+            }
         };
         self.parts.append(&mut vec![Part { element: part_to_append,
                                              position: old_position, color: self.color }]);
@@ -145,7 +155,7 @@ impl CanvasParts{
     match new_element {
         Element::Wall => self.environment.push(Part { element: new_element, position, color: color.unwrap() }),
         Element::Spawn | Element::Food => self.interactable.push(Part { element: new_element, position, color: color.unwrap() }),
-        Element::BodyPartHead | Element::BodyPartVert | Element::BodyPartHori | Element::BodyPartLeftLean | Element::BodyPartRightLean => {
+        Element::BodyPartVert | Element::BodyPartHori | Element::BodyPartLeftLean | Element::BodyPartRightLean | Element::WespBody => {
             if let Some(index) = creature_index {
                 let color = self.alive[index].color;
                 self.alive[index].parts.push(Part { element: new_element, position, color: color });
@@ -153,10 +163,16 @@ impl CanvasParts{
                 panic!("No creature index provided");
             }
         }
+        _ => panic!("Creature heads may not be added with this function. Use add_creature instead."),
     }
 }
     pub(crate) fn add_creature(&mut self, position: (u16, u16), color: Color, curent_direction: (DirectionX, DirectionY), species: Species, spawner_at: (u16, u16)) {
-        self.alive.push(Creature {parts: vec![Part { element: Element::BodyPartHead, position: position, color: color }],
+        let head = match species {
+            Species::Wesp => Element::WespHead,
+            _ => Element::BodyPartHead,
+        };
+            
+        self.alive.push(Creature {parts: vec![Part { element: head, position: position, color: color }],
                                  color: color, curent_direction: curent_direction, killed: false,
                                  species: species, spawner_at: spawner_at});
     }

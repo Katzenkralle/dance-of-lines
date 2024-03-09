@@ -2,7 +2,7 @@
 pub use std; // for documentation purposes
 use std::io::{self, Write};
 use components::CanvasParts;
-use crossterm::{cursor::MoveTo, execute, queue, style::{Color, PrintStyledContent, Stylize}, terminal::{enable_raw_mode, EnableLineWrap}, QueueableCommand};
+use crossterm::{cursor::MoveTo, execute, queue, style::{Color, PrintStyledContent, Stylize}, terminal::EnableLineWrap, QueueableCommand};
 use lazy_static::lazy_static; 
 //lazy_static is ok, mutability not needed
 use rand::{thread_rng, Rng};
@@ -13,6 +13,7 @@ use std::collections::HashMap;
 
 mod part_handler;
 mod components;
+mod pathfinder;
 
 const SPAWNERS:u16 = 3;
 
@@ -30,6 +31,8 @@ lazy_static!{
         (components::Element::BodyPartLeftLean, '/'),
         (components::Element::Food, '#'),
         (components::Element::BodyPartHead, '█'),
+        (components::Element::WespHead, '0'),
+        (components::Element::WespBody, '•'),
     ]);
     }
 
@@ -78,29 +81,31 @@ fn draw_canvas(canvas: &CanvasParts, cleared_coords: &mut Vec<(u16, u16)>) {
 
 fn main() {
     // Prepare the terminal
-    //let _ = enable_raw_mode();
     execute!(io::stdout(), EnableLineWrap).unwrap();
     let mut stdout = io::stdout();
     stdout.queue(crossterm::cursor::Hide).unwrap();
     stdout.queue(crossterm::terminal::Clear(crossterm::terminal::ClearType::All)).unwrap();
     stdout.flush().unwrap();
+
     // Create the canvas
     let mut canvas: CanvasParts = create_canvas();
     let mut state = components::CanvasState { iterations: 0, cleared_coords: Vec::new() }; //food_rate: 0
     draw_canvas(&canvas, &mut state.cleared_coords);
     loop {
-        //let mut now = Instant::now();
-        part_handler::head_handle(&mut canvas);
+        let now = Instant::now();
+        pathfinder::head_handle(&mut canvas);
         part_handler::spawner_handle(&mut canvas);
         part_handler::handle_killed(&mut canvas.alive, &mut state.cleared_coords);
         part_handler::spawn_food(&mut canvas);  
-        //let elapsed_calc = now.elapsed();
-        //now = Instant::now();
+
         draw_canvas(&canvas, &mut state.cleared_coords);
-        //let elapsed = now.elapsed();
-        //println!("Print Elapsed: {:.2?}, Calc Elapsed: {:.2?}", elapsed, elapsed_calc);
         state.iterations += 1;
-        sleep(Duration::from_millis(8));
+
+        let elapsed = now.elapsed();
+        if elapsed < Duration::from_millis(50) {
+            sleep(Duration::from_millis(50) - elapsed);
+        }
+
     }
     
 }
