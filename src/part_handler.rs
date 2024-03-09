@@ -5,31 +5,9 @@ use lazy_static::lazy_static;
 use rand::Rng;
 use crate::HashMap;
 
-use crate::components::{self, CanvasParts, Creature, Direction, Element, Part, Species};
+use crate::components::{self, directions_to_check, pos_alteration_by_direction, CanvasParts, Creature, DirectionX, DirectionY, Element, Part, Species};
 const SIGHT_RADIUS: u16 = 4;
 
-lazy_static! {
-    pub static ref CHECK_DIRECTIONS: HashMap<(Direction, Direction), (Vec<Vec<Direction>>, Element)> = HashMap::from([
-        ((Direction::Up, Direction::None), (vec![vec![Direction::Up, Direction::None], vec![Direction::Up, Direction::Right], vec![Direction::Up, Direction::Left]], Element::BodyPartHori)),
-        ((Direction::Up, Direction::Right), (vec![vec![Direction::Up, Direction::Right], vec![Direction::Up, Direction::None], vec![Direction::None, Direction::Right]], Element::BodyPartLeftLean)),
-        ((Direction::Up, Direction::Left), (vec![vec![Direction::Up, Direction::Left], vec![Direction::Up, Direction::None], vec![Direction::None, Direction::Left]], Element::BodyPartRightLean)),
-        ((Direction::Down, Direction::None), (vec![vec![Direction::Down, Direction::None], vec![Direction::Down, Direction::Right], vec![Direction::Down, Direction::Left]], Element::BodyPartHori)),
-        ((Direction::Down, Direction::Right), (vec![vec![Direction::Down, Direction::Right], vec![Direction::Down, Direction::None], vec![Direction::None, Direction::Right]], Element::BodyPartRightLean)),
-        ((Direction::Down, Direction::Left), (vec![vec![Direction::Down, Direction::Left], vec![Direction::Down, Direction::None], vec![Direction::None, Direction::Left]], Element::BodyPartLeftLean)),
-        ((Direction::None, Direction::Right), (vec![vec![Direction::None, Direction::Right], vec![Direction::Up, Direction::Right], vec![Direction::Down, Direction::Right]], Element::BodyPartVert)),
-        ((Direction::None, Direction::Left), (vec![vec![Direction::None, Direction::Left], vec![Direction::Up, Direction::Left], vec![Direction::Down, Direction::Left]], Element::BodyPartVert)),
-    ]);
-}
-
-lazy_static!{
-    static ref DIRECTIONS: HashMap<components::Direction, i32> = HashMap::from([
-        (Direction::Up, -1),
-        (Direction::Down,  1),
-        (Direction::Right,  1),
-        (Direction::Left, -1),
-        (Direction::None,  0)
-    ]);
-}
 
 lazy_static!{
     static ref ITERATION_TIMES: HashMap<components::Species, u8> = HashMap::from([
@@ -71,13 +49,13 @@ pub fn spawner_handle(canvas: &mut CanvasParts) {
     let x: u16 = rand_gen.gen_range(0..=1000);
     if x < 10*active_spawn_count as u16 {
         let index = unused_spawns[rand_gen.gen_range(0..active_spawn_count)];
-        let pos: (u16, u16, (Direction, Direction)) = match x % 4 {
+        let pos: (u16, u16, (DirectionX, DirectionY)) = match x % 4 {
             // 0: up 1: right 2: down 3: left
-            0 => (canvas.interactable[index].position.0, canvas.interactable[index].position.1 - 1, (Direction::Up, Direction::None)),
-            1 => (canvas.interactable[index].position.0 + 1, canvas.interactable[index].position.1, (Direction::None, Direction::Right)),
-            2 => (canvas.interactable[index].position.0, canvas.interactable[index].position.1 + 1, (Direction::Down, Direction::None)),
-            3 => (canvas.interactable[index].position.0 - 1, canvas.interactable[index].position.1, (Direction::None, Direction::Left)),
-            _ => (1, 1, (Direction::Down, Direction::None)),
+            0 => (canvas.interactable[index].position.0, canvas.interactable[index].position.1 - 1, (DirectionX::None, DirectionY::Up)),
+            1 => (canvas.interactable[index].position.0 + 1, canvas.interactable[index].position.1, (DirectionX::Right,DirectionY::None)),
+            2 => (canvas.interactable[index].position.0, canvas.interactable[index].position.1 + 1, (DirectionX::None, DirectionY::Down)),
+            3 => (canvas.interactable[index].position.0 - 1, canvas.interactable[index].position.1, (DirectionX::Left, DirectionY::None)),
+            _ => (1, 1, (DirectionX::None, DirectionY::Down)),
         };
         
         if !check_collision(&canvas.environment, (pos.0, pos.1)) {
@@ -120,23 +98,24 @@ fn wesp_path_match(elem:Element) -> i64 {
     }
 }
 
-fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &Vec<Part>, position: &(u16, u16),
-                             direction: &(Direction, Direction), iterations_left: u8, ) -> (i32, i32, (Direction, Direction), i64){
+fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &Vec<Part>, fov: isize, position: &(u16, u16),
+                             direction: &(DirectionX, DirectionY), iterations_left: u8, ) -> (i32, i32, (DirectionX, DirectionY), i64){
     // Position to check x, Position to check y, Direction to walk, Vale of Direction
-    let mut dyn_pos_res: Vec<(i32, i32, (Direction, Direction), i64)> = Vec::new();
+    let mut dyn_pos_res: Vec<(i32, i32, (DirectionX, DirectionY), i64)> = Vec::new();
 
 
     // Create a vector of tuples with the possible positions and their values(liklihood of beeing chosen)
-    for direction_to_check in CHECK_DIRECTIONS[&direction].0.iter() {
-        let (dir_x, dir_y): (Direction, Direction) = (direction_to_check[0], direction_to_check[1]);
-        dyn_pos_res.push((i32::from(position.0) + DIRECTIONS[&dir_x], i32::from(position.1) + DIRECTIONS[&dir_y], (dir_x, dir_y), 0));
+    for direction_to_check in directions_to_check(&direction, fov).iter() {
+        let (dir_x, dir_y): (DirectionX, DirectionY) = ((*direction_to_check).0, (*direction_to_check).1);
+        let (x, y): (i32, i32) = pos_alteration_by_direction(Some(&dir_x), Some(&dir_y), position);
+        dyn_pos_res.push((x, y, (dir_x, dir_y), 0));
     }
 
     let (sender, receiver) = mpsc::channel();
     let mut threads: Vec<thread::JoinHandle<()>> = Vec::new();
     // Iterate over the vector and check if the position is in sight, what value the sight has
     for index in 0..dyn_pos_res.len() {
-        let (x, y, v_direction, mut val): (i32, i32, (Direction, Direction), i64) = dyn_pos_res[index].clone();
+        let (x, y, v_direction, mut val): (i32, i32, (DirectionX, DirectionY), i64) = dyn_pos_res[index].clone();
         for part in parts_in_sight {
             if part.position == (x as u16, y as u16) {
                 //When element in sight, part is element in sight
@@ -149,7 +128,7 @@ fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &
             let sender = sender.clone();
             let parts_in_sight = parts_in_sight.clone();
             threads.push(thread::spawn(move || {
-                let t_val = recursive_colision_check(path_to_match, &parts_in_sight, &(x as u16, y as u16), &v_direction, iterations_left - 1).3;
+                let t_val = recursive_colision_check(path_to_match, &parts_in_sight, fov, &(x as u16, y as u16), &v_direction, iterations_left - 1).3;
                 sender.send((t_val, index)).unwrap();
             }));
         }
@@ -177,6 +156,10 @@ pub fn head_handle(canvas: &mut CanvasParts) {
 
     let cloned_canvas = canvas.clone();
     for creature in canvas.alive.iter_mut() {
+        let fov = match creature.species {
+            Species::DetachedSnake => 2,
+            _ => 1,
+        };
         for _ in 0..ITERATION_TIMES[&creature.species] {
             let head = creature.parts.iter().filter(|elem| elem.element == Element::BodyPartHead).next();
             if head.is_none() {
@@ -204,12 +187,12 @@ pub fn head_handle(canvas: &mut CanvasParts) {
             let sender = sender.clone();
 
             let thread = thread::spawn(move || {
-                    let result: (i32, i32, (Direction, Direction), i64) = recursive_colision_check(matcher, &parts_in_sight_thread,
+                    let result = recursive_colision_check(matcher, &parts_in_sight_thread, fov,
                                     &head.position, &dir_thread , SIGHT_RADIUS as u8);   
                     sender.send(result).unwrap();
             });
 
-            let res: (i32, i32, (Direction, Direction), i64) = receiver.recv().unwrap();
+            let res: (i32, i32, (DirectionX, DirectionY), i64) = receiver.recv().unwrap();
             thread.join().unwrap();
 
             // Check colisions of new position
@@ -255,7 +238,7 @@ pub fn handle_killed(creatures: &mut Vec<Creature>, cleared_coords: &mut Vec<(u1
         if creature.species == Species::DetachedSnake && creature.parts.len() > 20 {
             cleared_coords.push(creature.parts[1].position); //0 Is head, 1 is oldes part
             creature.parts.remove(1);
-        } else if creature.species == Species::Wesp && creature.parts.len() > 5 {
+        } else if creature.species == Species::Wesp && creature.parts.len() > 3 {
             cleared_coords.push(creature.parts[1].position); //
             cleared_coords.push(creature.parts[2].position);
             creature.parts.remove(1); //0 Is head, 1 is oldes part, tow parts are removed

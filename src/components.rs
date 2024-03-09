@@ -4,7 +4,6 @@ use crossterm::style::Color;
 
 
 use crate::TERM_SIZE;
-use crate::part_handler;
 
 #[derive(PartialEq, Clone, Hash, Eq, Copy)]
 pub enum Species {
@@ -13,14 +12,65 @@ pub enum Species {
     Wesp
 }
 
-#[derive(PartialEq, Eq, Hash, Copy, Clone)]
-pub enum Direction {
-    Up,
-    Down,
+#[derive(PartialEq, Clone, Copy)]
+pub enum DirectionX {
     Left,
     Right,
     None,
 }
+#[derive(PartialEq, Clone, Copy)]
+pub enum DirectionY {
+    Up,
+    Down,
+    None,
+}
+
+pub fn directions_to_check(current_dir: &(DirectionX, DirectionY), fov: isize) -> Vec<(DirectionX, DirectionY)> {
+    let circle = vec![
+        (DirectionX::Left, DirectionY::None),
+        (DirectionX::Left, DirectionY::Up),
+        (DirectionX::None, DirectionY::Up),
+        (DirectionX::Right, DirectionY::Up),
+        (DirectionX::Right, DirectionY::None),
+        (DirectionX::Right, DirectionY::Down),
+        (DirectionX::None, DirectionY::Down),
+        (DirectionX::Left, DirectionY::Down),
+    ];
+
+    let current_index = circle.iter().position(|&x| x == *current_dir).unwrap() as isize;
+    let circle_len = circle.len() as isize;
+
+    let mut directions_to_check = Vec::new();
+    for i in -fov..=fov {
+        // Move to the next index
+        //   index = (index +1) % array.len(); loop through the array avoiding out of bounds
+        //% operator is the remainder operator, not the modulo operator
+        let index_circle = (((current_index + i)%circle_len) + circle_len)%circle_len;
+        directions_to_check.push(circle[index_circle as usize]);
+    }
+    directions_to_check
+}
+
+pub fn pos_alteration_by_direction(dir_x: Option<&DirectionX>, dir_y: Option<&DirectionY>, position: &(u16, u16)) -> (i32, i32) {
+    let mut new_position = (position.0 as i32, position.1 as i32);
+    if let Some(dir_x) = dir_x {
+        match dir_x {
+            DirectionX::Left => new_position.0 -= 1,
+            DirectionX::Right => new_position.0 += 1,
+            DirectionX::None => (),
+        }
+    }
+    if let Some(dir_y) = dir_y {
+        match dir_y {
+            DirectionY::Up => new_position.1 -= 1,
+            DirectionY::Down => new_position.1 += 1,
+            DirectionY::None => (),
+        }
+    }
+    new_position
+}
+
+
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 
@@ -49,20 +99,31 @@ pub(crate) struct Creature {
     pub(crate) parts: Vec<Part>,
     pub(crate) color: Color,
     pub(crate) species: Species,
-    pub(crate) curent_direction: (Direction, Direction),
+    pub(crate) curent_direction: (DirectionX, DirectionY),
     pub(crate) spawner_at: (u16, u16),
     pub(crate) killed: bool,
 }
 
 impl Creature {
-    pub(crate) fn move_to(&mut self, new_position: (u16, u16), moved_in_direction: (Direction, Direction), colision: bool) {
+    pub(crate) fn move_to(&mut self, new_position: (u16, u16), moved_in_direction: (DirectionX, DirectionY), colision: bool) {
         let old_position = self.parts[0].position; // 0 Allways the head
         self.parts[0].position = new_position;
         self.curent_direction = moved_in_direction;
         if new_position.0 > TERM_SIZE.0 || new_position.0 <= 0 ||  new_position.1 > TERM_SIZE.1 || new_position.1 <= 0 || colision {
             self.killed = true;
         }
-        self.parts.append(&mut vec![Part { element: part_handler::CHECK_DIRECTIONS[&self.curent_direction].1,
+        let part_to_append = match moved_in_direction {
+            (DirectionX::None, DirectionY::Up) =>  Element::BodyPartVert,
+            (DirectionX::Right,DirectionY::Up) =>  Element::BodyPartLeftLean,
+            (DirectionX::Left, DirectionY::Up) =>  Element::BodyPartRightLean,
+            (DirectionX::None, DirectionY::Down) =>Element::BodyPartVert,
+            (DirectionX::Right,DirectionY::Down) =>Element::BodyPartRightLean,
+            (DirectionX::Left, DirectionY::Down) =>Element::BodyPartLeftLean,
+            (DirectionX::Right,DirectionY::None) =>Element::BodyPartHori,
+            (DirectionX::Left, DirectionY::None) =>Element::BodyPartHori,
+            _ => Element::BodyPartHori,
+        };
+        self.parts.append(&mut vec![Part { element: part_to_append,
                                              position: old_position, color: self.color }]);
     
 }
@@ -94,7 +155,7 @@ impl CanvasParts{
         }
     }
 }
-    pub(crate) fn add_creature(&mut self, position: (u16, u16), color: Color, curent_direction: (Direction, Direction), species: Species, spawner_at: (u16, u16)) {
+    pub(crate) fn add_creature(&mut self, position: (u16, u16), color: Color, curent_direction: (DirectionX, DirectionY), species: Species, spawner_at: (u16, u16)) {
         self.alive.push(Creature {parts: vec![Part { element: Element::BodyPartHead, position: position, color: color }],
                                  color: color, curent_direction: curent_direction, killed: false,
                                  species: species, spawner_at: spawner_at});
