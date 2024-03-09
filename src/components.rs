@@ -112,12 +112,14 @@ pub(crate) struct Creature {
 
 impl Creature {
     pub(crate) fn move_to(&mut self, new_position: (u16, u16), moved_in_direction: (DirectionX, DirectionY), colision: bool) {
+        if new_position.0 > TERM_SIZE.0 || new_position.0 <= 0 ||  new_position.1 > TERM_SIZE.1 || new_position.1 <= 0 || colision {
+            self.killed = true;
+            return;
+        }
         let old_position = self.parts[0].position; // 0 Allways the head
         self.parts[0].position = new_position;
         self.curent_direction = moved_in_direction;
-        if new_position.0 > TERM_SIZE.0 || new_position.0 <= 0 ||  new_position.1 > TERM_SIZE.1 || new_position.1 <= 0 || colision {
-            self.killed = true;
-        }
+        
         let part_to_append = if self.species == Species::Wesp {
             Element::WespBody
         } else {

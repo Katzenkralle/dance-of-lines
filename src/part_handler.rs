@@ -72,8 +72,6 @@ pub fn handle_killed(creatures: &mut Vec<Creature>, cleared_coords: &mut Vec<(u1
     let mut to_remove: Vec<usize> = Vec::new();
     for (index, creature) in creatures.iter_mut().enumerate().rev() {
         
-
-        
         if creature.species == Species::DetachedSnake && creature.parts.len() > 20 {
             cleared_coords.push(creature.parts[1].position); //0 Is head, 1 is oldes part
             creature.parts.remove(1);
@@ -83,7 +81,6 @@ pub fn handle_killed(creatures: &mut Vec<Creature>, cleared_coords: &mut Vec<(u1
             creature.parts.remove(1); //0 Is head, 1 is oldes part, tow parts are removed
             creature.parts.remove(1);
         }
-
 
         if creature.killed {
             for _ in 0..=3 {

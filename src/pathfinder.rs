@@ -4,6 +4,9 @@ use crate::CanvasParts;
 use std::thread;
 use std::sync::mpsc;
 
+const MAX_THREADS: u32 = 24;
+
+
 fn snake_path_match(elem:Element) -> i64 {
     match elem {
         Element::Wall | Element::Spawn => -100,
@@ -23,7 +26,7 @@ fn wesp_path_match(elem:Element) -> i64 {
 }
 
 fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &Vec<Part>, fov: isize, position: &(u16, u16),
-                             direction: &(DirectionX, DirectionY), iterations_left: u8) -> (i32, i32, (DirectionX, DirectionY), i64){
+                             direction: &(DirectionX, DirectionY), iterations_left: u8, iterations_passed: u32) -> (i32, i32, (DirectionX, DirectionY), i64){
     // Position to check x, Position to check y, Direction to walk, Vale of Direction
     let mut dyn_pos_res: Vec<(i32, i32, (DirectionX, DirectionY), i64)> = Vec::new();
 
@@ -51,10 +54,14 @@ fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &
         if iterations_left > 0 {
             let sender = sender.clone();
             let parts_in_sight = parts_in_sight.clone();
-            threads.push(thread::spawn(move || {
-                let t_val = recursive_colision_check(path_to_match, &parts_in_sight, fov, &(x as u16, y as u16), &v_direction, iterations_left - 1).3;
-                sender.send((t_val, index)).unwrap();
-            }));
+            if ((dyn_pos_res.len() as i32).pow(iterations_passed) as u32) < MAX_THREADS {
+                threads.push(thread::spawn(move || {
+                    let t_val = recursive_colision_check(path_to_match, &parts_in_sight, fov, &(x as u16, y as u16), &v_direction, iterations_left - 1, iterations_passed +1).3;
+                    sender.send((t_val, index)).unwrap();
+                }));
+            } else {
+                dyn_pos_res[index].3 += recursive_colision_check(path_to_match, &parts_in_sight, fov, &(x as u16, y as u16), &v_direction, iterations_left - 1, iterations_passed +1).3;
+            }
         }
     }
 
@@ -108,7 +115,7 @@ pub fn head_handle(canvas: &mut CanvasParts) {
             };
            
             let res = recursive_colision_check(matcher, &parts_in_sight, fov,
-                            &head.position, &creature.curent_direction , sight_radius as u8);   
+                            &head.position, &creature.curent_direction , sight_radius as u8, 0);   
 
             // Check colisions of new position
             let mut colision = false;
