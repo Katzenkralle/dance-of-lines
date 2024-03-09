@@ -47,8 +47,8 @@ pub fn spawner_handle(canvas: &mut CanvasParts) {
         if !check_collision(&canvas.environment, (pos.0, pos.1)) {
             let color = get_unused_color(&canvas.alive);
             match x % 10 {
-                0 | 1 => canvas.add_creature((pos.0, pos.1), color, pos.2, Species::DetachedSnake, canvas.interactable[index].position),
-                2 => canvas.add_creature((pos.0, pos.1), color, pos.2, Species::Wesp, canvas.interactable[index].position),
+                0  => canvas.add_creature((pos.0, pos.1), color, pos.2, Species::DetachedSnake, canvas.interactable[index].position),
+                1 => canvas.add_creature((pos.0, pos.1), color, pos.2, Species::Wesp, canvas.interactable[index].position),
                 _ => canvas.add_creature((pos.0, pos.1), color, pos.2, Species::NormalSnake, canvas.interactable[index].position),
             }
             canvas.interactable[index].color = Color::Rgb { r: 10, g: 100, b: 10 };

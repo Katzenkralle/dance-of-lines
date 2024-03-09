@@ -2,7 +2,7 @@
 pub use std; // for documentation purposes
 use std::io::{self, Write};
 use components::CanvasParts;
-use crossterm::{cursor::MoveTo, execute, queue, style::{Color, PrintStyledContent, Stylize}, terminal::EnableLineWrap, QueueableCommand};
+use crossterm::{cursor::{self, MoveTo}, execute, queue, style::{Color, PrintStyledContent, Stylize}, terminal::EnableLineWrap, QueueableCommand};
 use lazy_static::lazy_static; 
 //lazy_static is ok, mutability not needed
 use rand::{thread_rng, Rng};
@@ -72,6 +72,9 @@ fn draw_canvas(canvas: &CanvasParts, cleared_coords: &mut Vec<(u16, u16)>) {
     }
 
     for part in unified_elements.iter() {
+        if true && part.position.1 == TERM_SIZE.1 - 1 {
+            continue;
+        } 
         queue!(stdout, MoveTo(part.position.0, part.position.1),
         PrintStyledContent(ELEMENT_VISUALS[&part.element].to_string().with(part.color))).unwrap();
     
@@ -92,6 +95,7 @@ fn main() {
     let mut canvas: CanvasParts = create_canvas();
     let mut state = components::CanvasState { iterations: 0, cleared_coords: Vec::new() }; //food_rate: 0
     draw_canvas(&canvas, &mut state.cleared_coords);
+    let mut last_refresh = Instant::now();
     loop {
         let now = Instant::now();
         pathfinder::head_handle(&mut canvas);
@@ -103,10 +107,14 @@ fn main() {
         state.iterations += 1;
 
         let elapsed = now.elapsed();
-        if elapsed < Duration::from_millis(50) {
-            sleep(Duration::from_millis(50) - elapsed);
+        if elapsed < Duration::from_millis(0) {
+            sleep(Duration::from_millis(0) - elapsed);
         }
-
+        if true && last_refresh.elapsed() > Duration::from_secs_f64(0.5) {
+            queue!(stdout, MoveTo(0, TERM_SIZE.1), PrintStyledContent(format!("Iterations: {} FPS: {:?}", state.iterations, 1000.0 / (elapsed.as_secs_f64() + 0.00)).with(Color::Reset))).unwrap();
+            stdout.flush().unwrap();
+            last_refresh = Instant::now();
+        }
     }
     
 }

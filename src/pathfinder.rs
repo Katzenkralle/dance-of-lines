@@ -3,8 +3,11 @@ use crate::components::{DirectionX, DirectionY, Element, Part, Species, directio
 use crate::CanvasParts;
 use std::thread;
 use std::sync::mpsc;
+use lazy_static::lazy_static;
 
-const MAX_THREADS: u32 = 24;
+lazy_static!{
+    static ref MAX_THREADS: u32 = 0; // Make the variable 
+}
 
 
 fn snake_path_match(elem:Element) -> i64 {
@@ -23,6 +26,25 @@ fn wesp_path_match(elem:Element) -> i64 {
         Element::BodyPartHead => 30,
         _ => 1,
     }
+}
+
+
+fn snake_colision_matcher(parts_in_sight: &Vec<Part>, position: &(u16, u16), canvas: &CanvasParts) -> (bool, Option<Vec<usize>>) {
+    let colision = parts_in_sight.iter().any(|elem| elem.position == (position.0 as u16, position.1 as u16) && elem.element != Element::Food);
+    (colision, None)
+}
+
+fn wesp_colision_matcher(parts_in_sight: &Vec<Part>, position: &(u16, u16), canvas: &CanvasParts) -> (bool, Option<Vec<usize>>) {
+    let mut wesp_kills: Vec<usize> = Vec::new();
+    let mut colision = false;
+    for part in parts_in_sight.iter() {
+        if part.position == (position.0 as u16, position.1 as u16) && part.element == Element::BodyPartHead{
+            wesp_kills.push(canvas.alive.iter().position(|x| x.parts[0].position == (position.0 as u16, position.1 as u16)).unwrap());
+        } else if part.position == (position.0 as u16, position.1 as u16) && part.element == Element::Food {
+            colision = true;
+        }
+    };
+    (colision, Some(wesp_kills))
 }
 
 fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &Vec<Part>, fov: isize, position: &(u16, u16),
@@ -54,7 +76,7 @@ fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &
         if iterations_left > 0 {
             let sender = sender.clone();
             let parts_in_sight = parts_in_sight.clone();
-            if ((dyn_pos_res.len() as i32).pow(iterations_passed) as u32) < MAX_THREADS {
+            if *MAX_THREADS != 0 && ((dyn_pos_res.len() as i32).pow(iterations_passed) as u32) < *MAX_THREADS { // Test for 0 to avoid calculation time
                 threads.push(thread::spawn(move || {
                     let t_val = recursive_colision_check(path_to_match, &parts_in_sight, fov, &(x as u16, y as u16), &v_direction, iterations_left - 1, iterations_passed +1).3;
                     sender.send((t_val, index)).unwrap();
@@ -82,15 +104,25 @@ fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &
 pub fn head_handle(canvas: &mut CanvasParts) {
     //Todo: Reomve or improve threading in this function!!
     // Find all elements that head can see
-    let mut wesp_kills: Vec<usize> = Vec::new();
+    let mut foreign_changes: Vec<usize> = Vec::new();
 
-    let cloned_canvas = canvas.clone();
-    for creature in canvas.alive.iter_mut() {
+    let mut cloned_canvas = canvas.clone();
+    for (index, creature) in canvas.alive.iter_mut().enumerate() {
         
         let (fov, speed, sight_radius): (isize, u8, i32) = match creature.species {
             Species::DetachedSnake => (2, 1, 4),
             Species::Wesp => (1, 2, 4),
             _ => (1, 1, 4),
+        };
+        let (eveluation_fn, colision_fn) = match creature.species {
+            Species::DetachedSnake | Species::NormalSnake => (
+                snake_path_match as fn(Element) -> i64,
+                snake_colision_matcher as fn(&Vec<Part>, &(u16, u16), &CanvasParts) -> (bool, Option<_>)
+            ),
+            Species::Wesp => (
+                wesp_path_match as fn(Element) -> i64,
+                wesp_colision_matcher as fn(&Vec<Part>, &(u16, u16), &CanvasParts) -> (bool, Option<_>)
+            ),
         };
 
         for _ in 0..speed {
@@ -99,8 +131,6 @@ pub fn head_handle(canvas: &mut CanvasParts) {
                 continue;
             }
             let head = head.unwrap().clone(); // Clone the head to avoid borrowing issues
-                
-
             // Concartination of all parts in sight
             let parts_in_sight: Vec<Part> = cloned_canvas.unify_elements().iter()
                     .filter(|elem| 
@@ -109,35 +139,26 @@ pub fn head_handle(canvas: &mut CanvasParts) {
                     .map(|elem| **elem)
                     .collect::<Vec<_>>();   
 
-            let matcher: fn(Element) -> i64 = match creature.species {
-                Species::DetachedSnake | Species::NormalSnake => snake_path_match,
-                Species::Wesp => wesp_path_match,
-            };
            
-            let res = recursive_colision_check(matcher, &parts_in_sight, fov,
+            let path_data = recursive_colision_check(eveluation_fn, &parts_in_sight, fov,
                             &head.position, &creature.curent_direction , sight_radius as u8, 0);   
 
             // Check colisions of new position
-            let mut colision = false;
-            if creature.species == Species::Wesp {
-                for part in parts_in_sight.iter() {
-                    if part.position == (res.0 as u16, res.1 as u16) && part.element == Element::BodyPartHead{
-                        wesp_kills.push(cloned_canvas.alive.iter().position(|x| x.parts[0].position == (res.0 as u16, res.1 as u16)).unwrap());
-                    } else if part.position == (res.0 as u16, res.1 as u16) && part.element == Element::Food {
-                        colision = true;
-                    }
-                }
-            } else {
-                colision = parts_in_sight.iter().any(|elem| elem.position == (res.0 as u16, res.1 as u16) && elem.element != Element::Food);
+            let (colision, opt_foreign_changes) = colision_fn(&parts_in_sight, &(path_data.0 as u16, path_data.1 as u16), &cloned_canvas);
+            match opt_foreign_changes {
+                Some(mut x) => foreign_changes.append(&mut x),
+                None => (),
             }
+
             // Move the head to the new position, spawn a new body part and update the direction
-            creature.move_to((res.0 as u16, res.1 as u16), res.2, colision);
+            creature.move_to((path_data.0 as u16, path_data.1 as u16), path_data.2, colision);
+            cloned_canvas.alive[index] = creature.clone(); // Update cloned canvass
 
             // Clean up food
             let mut to_remove: Vec<usize> = Vec::new();
             // Iterate over a mutable reference to the canvas vector
             for (index, element) in canvas.interactable.iter_mut().enumerate() {
-                if element.position == (res.0 as u16, res.1 as u16) && element.element == Element::Food {
+                if element.position == (path_data.0 as u16, path_data.1 as u16) && element.element == Element::Food {
                     to_remove.push(index);
                 } 
             }
@@ -146,5 +167,5 @@ pub fn head_handle(canvas: &mut CanvasParts) {
             to_remove.iter().for_each(|x| {canvas.interactable.remove(*x);});
         }
     }
-    wesp_kills.iter().for_each(|x| {canvas.alive[*x].killed = true;});
+    foreign_changes.iter().for_each(|x| {canvas.alive[*x].killed = true;});
 }
