@@ -14,14 +14,16 @@ use std::collections::HashMap;
 mod part_handler;
 mod components;
 
+const SPAWNERS:u16 = 3;
+
 lazy_static! {
     static ref TERM_SIZE: (u16, u16) = crossterm::terminal::size().unwrap_or_else(|_| panic!("Cannot get terminal size"));
 }
 
 lazy_static!{
     static ref ELEMENT_VISUALS: HashMap<components::Element, char> = HashMap::from([
-        (components::Element::Wall, 'H'),
-        (components::Element::Spawn, '@'),
+        (components::Element::Wall, '𐲕'),
+        (components::Element::Spawn, '⬟'),
         (components::Element::BodyPartVert, '|'),
         (components::Element::BodyPartHori, '-'),
         (components::Element::BodyPartRightLean, '\\'),
@@ -47,9 +49,10 @@ fn create_canvas() -> CanvasParts{
             canvas.add_element(components::Element::Wall, (0, y), Some(wall_color), None); // Use array indexing instead of tuple indexing
         }
     }
-    for _ in 0..3{
+    let spawner_ranges = (TERM_SIZE.0-1) / SPAWNERS as u16;
+    for i in 0..SPAWNERS{
     // Use array indexing instead of tuple indexing
-    canvas.add_element(components::Element::Spawn, (rng.gen_range(1..TERM_SIZE.0-1), rng.gen_range(1..TERM_SIZE.1-1)), Some(Color::Rgb { r: 10, g: 255, b: 10 }), None);
+    canvas.add_element(components::Element::Spawn, (rng.gen_range((spawner_ranges*i)..spawner_ranges*(i+1)), rng.gen_range(1..TERM_SIZE.1-1)), Some(Color::Rgb { r: 10, g: 255, b: 10 }), None);
     }
     
     canvas // Return the canvas vector

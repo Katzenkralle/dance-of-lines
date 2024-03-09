@@ -6,7 +6,7 @@ use crossterm::style::Color;
 use crate::TERM_SIZE;
 use crate::part_handler;
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Hash, Eq, Copy)]
 pub enum Species {
     NormalSnake,
     DetachedSnake,
@@ -59,7 +59,7 @@ impl Creature {
         let old_position = self.parts[0].position; // 0 Allways the head
         self.parts[0].position = new_position;
         self.curent_direction = moved_in_direction;
-        if new_position.0 > TERM_SIZE.0 || new_position.1 > TERM_SIZE.1 || colision {
+        if new_position.0 > TERM_SIZE.0 || new_position.0 <= 0 ||  new_position.1 > TERM_SIZE.1 || new_position.1 <= 0 || colision {
             self.killed = true;
         }
         self.parts.append(&mut vec![Part { element: part_handler::CHECK_DIRECTIONS[&self.curent_direction].1,
