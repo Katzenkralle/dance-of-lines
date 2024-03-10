@@ -3,12 +3,6 @@ use crate::components::{DirectionX, DirectionY, Element, Part, Species, directio
 use crate::CanvasParts;
 use std::thread;
 use std::sync::mpsc;
-use lazy_static::lazy_static;
-
-lazy_static!{
-    static ref MAX_THREADS: u32 = 0; // Make the variable 
-}
-
 
 fn snake_path_match(elem:Element) -> i64 {
     match elem {
@@ -29,7 +23,7 @@ fn wesp_path_match(elem:Element) -> i64 {
 }
 
 
-fn snake_colision_matcher(parts_in_sight: &Vec<Part>, position: &(u16, u16), canvas: &CanvasParts) -> (bool, Option<Vec<usize>>) {
+fn snake_colision_matcher(parts_in_sight: &Vec<Part>, position: &(u16, u16), _: &CanvasParts) -> (bool, Option<Vec<usize>>) {
     let colision = parts_in_sight.iter().any(|elem| elem.position == (position.0 as u16, position.1 as u16) && elem.element != Element::Food);
     (colision, None)
 }
@@ -76,7 +70,7 @@ fn recursive_colision_check(path_to_match: fn(Element) -> i64, parts_in_sight: &
         if iterations_left > 0 {
             let sender = sender.clone();
             let parts_in_sight = parts_in_sight.clone();
-            if *MAX_THREADS != 0 && ((dyn_pos_res.len() as i32).pow(iterations_passed) as u32) < *MAX_THREADS { // Test for 0 to avoid calculation time
+            if *crate::MAX_THREADS.read().unwrap() != 0 && ((dyn_pos_res.len() as i32).pow(iterations_passed) as u32) < *crate::MAX_THREADS.read().unwrap() { // Test for 0 to avoid calculation time
                 threads.push(thread::spawn(move || {
                     let t_val = recursive_colision_check(path_to_match, &parts_in_sight, fov, &(x as u16, y as u16), &v_direction, iterations_left - 1, iterations_passed +1).3;
                     sender.send((t_val, index)).unwrap();

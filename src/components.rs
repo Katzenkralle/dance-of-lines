@@ -2,7 +2,6 @@
 
 use crossterm::style::Color;
 
-
 use crate::TERM_SIZE;
 
 #[derive(PartialEq, Clone, Hash, Eq, Copy)]
@@ -112,7 +111,7 @@ pub(crate) struct Creature {
 
 impl Creature {
     pub(crate) fn move_to(&mut self, new_position: (u16, u16), moved_in_direction: (DirectionX, DirectionY), colision: bool) {
-        if new_position.0 > TERM_SIZE.0 || new_position.0 <= 0 ||  new_position.1 > TERM_SIZE.1 || new_position.1 <= 0 || colision {
+        if new_position.0 > TERM_SIZE.read().unwrap().0 || new_position.0 <= 0 ||  new_position.1 > TERM_SIZE.read().unwrap().1 || new_position.1 <= 0 || colision {
             self.killed = true;
             return;
         }
@@ -150,7 +149,7 @@ pub(crate) struct CanvasParts {
 impl CanvasParts{
     pub(crate) fn add_element(&mut self, new_element: Element, position: (u16, u16), color: Option<Color>,
     creature_index: Option<usize>){
-    if position.0 > TERM_SIZE.0 || position.1 > TERM_SIZE.1 {
+    if position.0 > TERM_SIZE.read().unwrap().0 || position.1 > TERM_SIZE.read().unwrap().1 {
         return;
     }
     

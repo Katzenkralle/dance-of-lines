@@ -103,9 +103,9 @@ pub fn spawn_food(canvas: &mut CanvasParts) {
     let mut rng = rand::thread_rng();
 
     if rng.gen_bool(0.30){
-        let mut pos: (u16, u16) = (rng.gen_range(1..crate::TERM_SIZE.0 - 1), rng.gen_range(1..crate::TERM_SIZE.1 - 1));
+        let mut pos: (u16, u16) = (rng.gen_range(1..crate::TERM_SIZE.read().unwrap().0 - 1), rng.gen_range(1..crate::TERM_SIZE.read().unwrap().1 - 1));
         while check_collision(&canvas.unify_elements().iter().map(|part| **part).collect(), pos) {
-            pos = (rng.gen_range(1..crate::TERM_SIZE.0 - 1), rng.gen_range(1..crate::TERM_SIZE.1 - 1));
+            pos = (rng.gen_range(1..crate::TERM_SIZE.read().unwrap().0 - 1), rng.gen_range(1..crate::TERM_SIZE.read().unwrap().1 - 1));
         }
         canvas.add_element(Element::Food, pos, Some(get_unused_color(&canvas.alive)), None);
     }
