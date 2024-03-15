@@ -34,7 +34,7 @@ lazy_static! {
 }
 
 lazy_static!{
-    static ref ELEMENT_VISUALS: HashMap<components::Element, char> = HashMap::from([
+    static ref ELEMENT_VISUALS: RwLock<HashMap<components::Element, char>> = RwLock::new(HashMap::from([
         (components::Element::Wall, '𐲕'),
         (components::Element::Spawn, '⬟'),
         (components::Element::BodyPartVert, '|'),
@@ -45,12 +45,13 @@ lazy_static!{
         (components::Element::BodyPartHead, '█'),
         (components::Element::WespHead, '0'),
         (components::Element::WespBody, '•'),
-    ]);
+    ]));
     }
 fn help_message() {
     println!("Usage: dance_of_lines [options]
     -i: Show stats
     -s <int>: Set spawner count
+    -l: Invert leaning of snake body parts
     -d <int>: Set minimum delay between frames in milliseconds
     -t <int> <int>: Set terminal size in columns and rows
     -p <int>: Set maximum thread count
@@ -66,9 +67,11 @@ fn set_runtime_constants(cl_args: std::env::Args) {
     let mut max_term_size = (0, 0);
     let mut spawners = 4;
     let mut max_threads = 0;
+    let mut invert_lean = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-i" => stats = true,
+            "-l" => invert_lean = true,
             "-s" => spawners = args.next().unwrap().parse().unwrap_or_else(|_| panic!("Invalid spawner count")),
             "-d" => min_delay = args.next().unwrap().parse().unwrap_or_else(|_| panic!("Invalid delay")),
             "-t" => max_term_size = (args.next().unwrap().parse().unwrap_or_else(|_| panic!("Invalid terminal size")), args.next().unwrap().parse().unwrap_or_else(|_| panic!("Invalid terminal size"))),
@@ -81,6 +84,10 @@ fn set_runtime_constants(cl_args: std::env::Args) {
         panic!("Terminal size too large");
     } else if max_term_size == (0, 0) {
         max_term_size = crossterm::terminal::size().unwrap_or_else(|_| panic!("Cannot get terminal size"));
+    }
+    if invert_lean {
+        ELEMENT_VISUALS.write().unwrap().insert(components::Element::BodyPartRightLean, '/');
+        ELEMENT_VISUALS.write().unwrap().insert(components::Element::BodyPartLeftLean, '\\');
     }
     *MAX_THREADS.write().unwrap() = max_threads;
     *SPAWNERS.write().unwrap() = spawners;
@@ -130,7 +137,7 @@ fn create_canvas() -> CanvasParts{
     let spawner_ranges = (TERM_SIZE.read().unwrap().0-1) / *SPAWNERS.read().unwrap() as u16;
     for i in 0..*SPAWNERS.read().unwrap(){
     // Use array indexing instead of tuple indexing
-    canvas.add_element(components::Element::Spawn, (rng.gen_range((spawner_ranges*i)..spawner_ranges*(i+1)), rng.gen_range(1..TERM_SIZE.read().unwrap().1-1)), Some(Color::Rgb { r: 10, g: 255, b: 10 }), None);
+        canvas.add_element(components::Element::Spawn, (rng.gen_range(((spawner_ranges*i)+1)..spawner_ranges*(i+1)), rng.gen_range(1..TERM_SIZE.read().unwrap().1-1)), Some(Color::Rgb { r: 10, g: 255, b: 10 }), None);
     }
     
     canvas // Return the canvas vector
@@ -149,9 +156,9 @@ fn draw_canvas(canvas: &CanvasParts, cleared_coords: &mut Vec<(u16, u16)>) {
     for part in unified_elements.iter() {
         if *SHOW_STATS.read().unwrap() && part.position.1 == TERM_SIZE.read().unwrap().1 - 1 {
             continue;
-        } 
+        }
         queue!(stdout, MoveTo(part.position.0, part.position.1),
-        PrintStyledContent(ELEMENT_VISUALS[&part.element].to_string().with(part.color))).unwrap();
+        PrintStyledContent(ELEMENT_VISUALS.read().unwrap()[&part.element].to_string().with(part.color))).unwrap();
     
     }
     cleared_coords.clear();
@@ -200,7 +207,7 @@ fn main() {
             let mut stats_string = format!("Iterations:{}|FPS:{:.2?}|Creatures:{}|<S>:stats|<R>:restart|<C-^>:exit",
                 state.iterations, 1000.0 / (elapsed.as_secs_f64() + *MIN_DELAY.read().unwrap() as f64), canvas.alive.len());
                 stats_string.truncate(TERM_SIZE.read().unwrap().0 as usize - 1);
-                stats_string =  format!("{}{}", &stats_string, ELEMENT_VISUALS[&components::Element::Wall].to_string().repeat((TERM_SIZE.read().unwrap().0 - stats_string.len() as u16) as usize));
+                stats_string =  format!("{}{}", &stats_string, ELEMENT_VISUALS.read().unwrap()[&components::Element::Wall].to_string().repeat((TERM_SIZE.read().unwrap().0 - stats_string.len() as u16) as usize));
                 
                 queue!(stdout, MoveTo(0, TERM_SIZE.read().unwrap().1), PrintStyledContent(stats_string.with(Color::Rgb { r: 255, g: 60, b: 70 }))).unwrap();
                 

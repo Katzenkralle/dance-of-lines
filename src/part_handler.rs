@@ -32,8 +32,8 @@ pub fn spawner_handle(canvas: &mut CanvasParts) {
     let mut rand_gen = rand::thread_rng();
     let active_spawn_count = unused_spawns.len();
 
-    let x: u16 = rand_gen.gen_range(0..=1000);
-    if x < 10*active_spawn_count as u16 {
+    let x: u64 = rand_gen.gen_range(0..=1000);
+    if x < 10*active_spawn_count as u64 {
         let index = unused_spawns[rand_gen.gen_range(0..active_spawn_count)];
         let pos: (u16, u16, (DirectionX, DirectionY)) = match x % 4 {
             // 0: up 1: right 2: down 3: left

@@ -18,6 +18,8 @@
                 "RUST_BACKTRACE": "1"
             },
             "args": [
+                "-s",
+                "50"
             ],
             "cwd": "${workspaceFolder}"
         },
