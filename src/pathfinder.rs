@@ -33,7 +33,7 @@ fn wesp_colision_matcher(parts_in_sight: &Vec<Part>, position: &(u16, u16), canv
     let mut colision = false;
     for part in parts_in_sight.iter() {
         if part.position == (position.0 as u16, position.1 as u16) && part.element == Element::BodyPartHead{
-            wesp_kills.push(canvas.alive.iter().position(|x| x.parts[0].position == (position.0 as u16, position.1 as u16)).unwrap());
+            wesp_kills.push(canvas.alive.iter().filter(|creature| creature.parts.len() > 0).position(|creature| creature.parts[0].position == (position.0 as u16, position.1 as u16)).unwrap());
         } else if part.position == (position.0 as u16, position.1 as u16) && part.element == Element::Food {
             colision = true;
         }
